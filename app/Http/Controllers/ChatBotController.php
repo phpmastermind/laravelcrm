@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
-require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
+//require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
 
 
 use App\Models\Customer;
@@ -22,7 +22,7 @@ class ChatBotController extends Controller
         Log::Info($data);
         $message = "";
         $from = $request->input('From');
-        $from = str_replace("whatsapp:+","",$from);
+        $from = str_replace("whatsapp:+91","",$from);
         $body = $request->input('Body');
         $customer = Customer::firstWhere('mobile', $from);
         //Log::Info($customer);
@@ -340,7 +340,7 @@ class ChatBotController extends Controller
         $auth_token = getenv("TWILIO_AUTH_TOKEN");
 
         $client = new Client($account_sid, $auth_token);
-        return $client->messages->create("whatsapp:+".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
+        return $client->messages->create("whatsapp:+91".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
     }
 
 
@@ -380,25 +380,49 @@ class ChatBotController extends Controller
      * Send Service Reminders to Customer Every Three Months.
      * 
      * */
-    public function SendReminder($value='')
+    public function SendServiceReminder(Request $request)
     {
-        $customers = Customer::where('status', '1')->get();
 
-        if(count($customers)>0){
-            foreach ($customers as $customer) {
-                $machines[] = [
-                    'id' => $customer->id, 
-                    'name' => $customer->name,
-                    'machine' => $customer->machine_model,
-                    'machine_code' => $customer->machine_code,
-                    'warranty_status' => $customer->warranty_status
-                ];
-
-                // if current date is more than 3 months of date of installation 
-            }
+        $customers = Customer::getCustomersWithLastServiceDoneThreeMonthsBefore();
+        $log = "Total Customers number service expiration :". count($customers);
+        $x = 0;
+        foreach ($customers as $row){
             
-        }else{
-            $machines = false;
+            $customer = Customer::find($row->id);
+            if($customer){
+                $user = Chat::firstWhere('number', $customer->mobile);
+                $from = $customer->mobile;
+                if(!$user){        
+                    Chat::create([
+                        "number" => $from, 
+                        "status" => "main", 
+                        "chat"   => ""
+                    ]);
+                }else{
+                    $user->status = 'main';
+                    $user->chat = '';
+                    $user->save();
+                }
+                Log::Info($user);
+                $menus = $this->getCaseTypes();
+                $message = "Hi {$customer->name} , I\'m your Kent Assistant 🙂 from KENT House of Purity!\nYour R.O water purifier ({$customer->machine_model}) service due is over. Please choose from the options below to book the service. Type option number and send.\n\n";
+                $i = 1;
+                foreach ($menus as $menu) {
+                   $message .= "[{$i}] . $menu->title" . "\n";
+                   $i++;
+                }
+                // send notification on whatsapp
+                $this->sendmessage($message, $customer->mobile); 
+
+                $customer->last_reminder = date("Y-m-d H:i:s");
+                $customer->save();
+                $x++;
+            }
+
         }
+        
+        $log .= "Total {$x} notification sent on ". date("Y-m-d H:i:s");
+        Log::Info($log);
+        return response($customers, 200);
     }
 }

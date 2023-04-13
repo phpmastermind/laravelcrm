@@ -41,8 +41,8 @@ class CustomerController extends AdminController
         $grid->column('date_of_inst', __('Date of inst'))->date('d/m/Y');
         $grid->column('month', __('Month'));
         $grid->column('status', __('Status'))->bool();
-        //$grid->column('created_at', __('Created at'));
-        $grid->column('updated_at', __('Updated at'));
+        $grid->column('last_service_date', __('Last Service'));
+        $grid->column('updated_at', __('Updated at'))->date('DD/MM/YYYY');
         
         $grid->model()->orderBy('id','asc');
         $grid->filter(function($filter){

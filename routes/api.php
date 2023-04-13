@@ -27,4 +27,6 @@ Route::middleware('auth:api')->get('/user', function (Request $request) {
 Route::post('/chatbot', 'App\Http\Controllers\ChatBotController@listenToReplies');
 
 
-Route::post('/chatbot/send', 'App\Http\Controllers\ChatBotController@sendWhatsappMessage');
+//Route::post('/chatbot/send', 'App\Http\Controllers\ChatBotController@sendWhatsappMessage');
+
+Route::get('/chatbot/sendreminders', 'App\Http\Controllers\ChatBotController@SendServiceReminder');

@@ -71,3 +71,6 @@ Route::get('/webhook', function(Request $request){
     Log::Info($response);
     return $response;
 });
+Auth::routes();
+
+Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

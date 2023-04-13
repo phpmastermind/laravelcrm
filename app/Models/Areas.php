@@ -13,5 +13,4 @@ class Areas extends Model
     use ModelTree;
 
     protected $table="areas";
-
 }
