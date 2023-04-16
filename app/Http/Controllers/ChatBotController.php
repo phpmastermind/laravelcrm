@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
-//require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
+require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
 
 
 use App\Models\Customer;
@@ -23,6 +23,7 @@ class ChatBotController extends Controller
         $message = "";
         $from = $request->input('From');
         $from = str_replace("whatsapp:+91","",$from);
+        $fromName = $request->input('ProfileName');
         $body = $request->input('Body');
         $customer = Customer::firstWhere('mobile', $from);
         //Log::Info($customer);
@@ -31,7 +32,7 @@ class ChatBotController extends Controller
         $menus = $this->getCaseTypes();
         if(!$user){
                         
-            $message = "Hi , I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
+            $message = "Hi {$fromName}, I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
             $i = 1;
             foreach ($menus as $menu) {
                $message .= "[{$i}] . $menu->title" . "\n";
@@ -86,11 +87,8 @@ class ChatBotController extends Controller
                             
                             $customer = Customer::where("mobile", $from)->first();
                             $case_type = CaseType::where('title', 'New Product Demo')->first();
-
-                            $case = Cases::latest()->first();
-                            $newid = 1000 + ((int) $case->id + 1);
-                            $caseid = "KENTRO".$newid;
-
+                            
+                            $caseid = $this->getNewCaseId();
                             $case = new Cases();
                             $case->customer_id = $customer->id;
                             $case->case_number = $caseid;
@@ -112,30 +110,24 @@ class ChatBotController extends Controller
                             $message = "Please select a machine by chossing an option below.\n.";
                             $i=1;
                             foreach ($customers as $customer) {
-                                $message  .= "[{$i}]. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
-                                $i++;
+                                if($customer->machine_model!=""){
+                                    $message  .= "[{$i}]. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
+                                    $i++;
+                                }
                             }
                                 
                         }elseif ($option == 3) {
-                            $customer = Customer::where("mobile", $from)->first();
-                            $case_type = CaseType::where('title', 'New Installation')->first();
-
-                            $case = Cases::latest()->first();
-                            $newid = 1000 + ((int) $case->id + 1);
-                            $caseid = "KENTRO".$newid;
-
-                            $case = new Cases();
-                            $case->customer_id = $customer->id;
-                            $case->case_number = $caseid;
-                            $case->case_type = $case_type->id;
-                            $case->case_status = "OPEN";
-                            $case->save();
-
-                            $user->status = 'booked';
-                            $user->chat = '';
+                            $user->status = 'new_installation';
                             $user->save();
-
-                            $message = "Service Booked Successfully. Your Request Id is {$caseid}.\n We will call you shortly. Thank You!";
+                            
+                            $message = "Please select a machine by chossing an option below.\n\n";
+                            $i=1;
+                            foreach ($customers as $customer) {
+                                if($customer->machine_model!=""){
+                                    $message  .= "[{$i}]. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
+                                    $i++;
+                                }
+                            }
                         }elseif ($option == 4) {
                             // code...
                             $user->status = 're_installation';
@@ -159,13 +151,53 @@ class ChatBotController extends Controller
                }
 
             }else{
-                $user->status = 'booked_failed';
-                $user->chat = "";
-                $user->save();
+                
+                if($user){
+                    $chat = json_decode($user->chat, true);
+                    $menu = intval($chat['menu']);
+                }
+                // if new product demo
+                if($menu == 1){
+                    
+                    if(!$customer){
+                        $customer = new Customer();
+                        $customer->name = $fromName;
+                        $customer->mobile = $from;
+                        $customer->save();
+                    }
+                    
+                    if($customer){
+                        $case_type = CaseType::where('title', 'New Product Demo')->first();
+                        $case = new Cases();
+                        $caseid = $this->getNewCaseId();
+                        $case->customer_id = $customer->id;
+                        $case->case_number = $caseid;
+                        $case->case_type = $case_type->id;
+                        $case->case_status = "OPEN";
+                        $case->save();
 
-                 $message="Please try with other number which is registered at the time of product purchase. Thank You!";
+                        $user->status = 'main';
+                        $user->chat = '';
+                        $user->save();
+
+                        $message = "Your request is booked successfully. Your Request Id is {$caseid}.\n We will call you shortly. Thank You!";
+                    }else{
+                        $user->status = 'main';
+                        $user->chat = "";
+                        $user->save();
+
+                        $message="Sorry, Your request could not booked. Please try again!";
+                    }
+
+                }else{
+
+                    $user->status = 'booked_failed';
+                    $user->chat = "";
+                    $user->save();
+
+                    $message="Please try with other number which is registered at the time of product purchase. Thank You!";
+                }
             }
-        
         
         }else if($user->status == 'register_service_call'){
 
@@ -189,12 +221,58 @@ class ChatBotController extends Controller
                 $customer = Customer::where("mobile", $from)->first();
                 $case_type = CaseType::where('title', 'Register Service Call')->first();
 
-                $case = Cases::latest()->first();
-                $newid = 1000 + ((int) $case->id + 1);
-                $caseid = "KENTRO".$newid;
+                $caseid = $this->getNewCaseId();
 
                 $case = new Cases();
                 $case->customer_id = $customer->id;
+                if($machine = $machines[((int)$option-1)]){
+                    $case->customer_id      = $machine['id'];
+                    $case->machine_number   = $machine['machine_number'];
+                }
+                $case->case_number = $caseid;
+                $case->case_type = $case_type->id;
+                $case->case_status = "OPEN";
+                $case->save();
+
+                $user->status = 'booked';
+                $user->chat = '';
+                $user->save();
+
+                $message = "Service Booked Successfully. Your Case Id is {$caseid}. \n We will call you shortly. Thank You!";
+            else:    
+                $message = "Wrong input, Try Again.";
+            endif;
+
+        }else if($user->status == 'new_installation'){
+
+            try {
+                $option = intval($body);
+            } catch (Exception $e) {
+                $message = "Please enter a valid response";
+                $res = $this->sendmessage($message, $from);
+                return str($res);
+            }
+
+            $machines = $this->getMachines($from);
+            if($option == 0):
+                $user->status = 'main';
+                $user->chat = '';
+                $user->save();
+                $message = "You can choose from one of the options below:\n\n Type Number \n\n";
+                $menus = $this->getCaseTypes();
+                foreach ($menus as $key => $menu) {$message .= "[".($key+1)."]. " . $menu;}
+            elseif($option >= 1 && $option <= count($machines)):
+                $customer = Customer::where("mobile", $from)->first();
+                $case_type = CaseType::where('title', 'New Installation')->first();
+
+                $caseid = $this->getNewCaseId();
+
+                $case = new Cases();
+                $case->customer_id = $customer->id;
+                if($machine = $machines[((int)$option-1)]){
+                    $case->customer_id      = $machine['id'];
+                    $case->machine_number   = $machine['machine_number'];
+                }
                 $case->case_number = $caseid;
                 $case->case_type = $case_type->id;
                 $case->case_status = "OPEN";
@@ -231,9 +309,7 @@ class ChatBotController extends Controller
                 $customer = Customer::where("mobile", $from)->first();
                 $case_type = CaseType::where('title', 'Re-Installation')->first();
 
-                $case = Cases::latest()->first();
-                $newid = 1000 + ((int) $case->id + 1);
-                $caseid = "KENTRO".$newid;
+                $caseid = $this->getNewCaseId();
 
                 $case = new Cases();
                 $case->customer_id = $customer->id;
@@ -266,9 +342,7 @@ class ChatBotController extends Controller
             $customer = Customer::where("mobile", $from)->first();
             $case_type = CaseType::where('title', 'Re-Installation')->first();
 
-            $case = Cases::latest()->first();
-            $newid = 1000 + ((int) $case->id + 1);
-            $caseid = "KENTRO".$newid;
+            $caseid = $this->getNewCaseId();
 
             $case = new Cases();
             $case->customer_id = $customer->id;
@@ -303,7 +377,7 @@ class ChatBotController extends Controller
             $user->chat = '';
             $user->save();
 
-            $message = "Hi , I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
+            $message = "Hi {$fromName}, I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
             $i = 1;
             foreach ($menus as $menu) {
                $message .= "[{$i}] . $menu->title" . "\n";
@@ -358,22 +432,39 @@ class ChatBotController extends Controller
     public function getMachines($mobile)
     {
         $customers = Customer::where('mobile', $mobile)->get();
+
         $machines = [];
         if(count($customers)>0){
             foreach ($customers as $customer) {
-                $machines[] = [
-                    'id' => $customer->id, 
-                    'name' => $customer->name,
-                    'machine' => $customer->machine_model,
-                    'machine_code' => $customer->machine_code,
-                    'warranty_status' => $customer->warranty_status
-                ];
+                if($customer->machine_number!=""){
+                    $machines[] = [
+                        'id' => $customer->id, 
+                        'name' => $customer->name,
+                        'machine' => $customer->machine_model,
+                        'machine_code' => $customer->machine_code,
+                        'machine_number' => $customer->machine_number,
+                        'warranty_status' => $customer->warranty_status
+                    ];
+                }
             }
-            
         }else{
             $machines = false;
         }
+        Log::Info($machines);
         return $machines;
+    }
+
+    public function getNewCaseId()
+    {
+        $case = Cases::latest()->first();
+        if($case){
+            $newid = 1000 + ((int) $case->id + 1);
+         }else{
+            $newid = 1001;
+         }
+       
+        $caseid = "KENTRO".$newid;
+        return $caseid;
     }
 
     /**

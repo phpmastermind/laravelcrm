@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-//require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
+require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
 
 
 use App\Models\Customer;
@@ -42,6 +42,7 @@ class CasesController extends AdminController
         $grid->column('case_number', __('Case Number'));
         $grid->column('customer.name', __('Customer'));
         $grid->column('engineer.name', __('Engineer'));
+        $grid->column('machine_number', __('Machine No.'));
         $grid->column('casetype.title', __('Case type'));
         $grid->column('remarks', __('Remarks'));
         $grid->column('case_status', __('Case status'));
@@ -117,6 +118,8 @@ class CasesController extends AdminController
         $newid = 1000 + ((int) $case->id + 1);
         $caseid = "KENTRO".$newid;
         $form->text('case_number','Case ID')->readonly()->default($caseid);
+        $form->select('case_type', __('Case Type'))->options((new CaseType)::selectOptions())->default(2);
+        
         $form->select('customer_id',"Select Customer")->options(function(){
             $engineers = \App\Models\Customer::All();
             $options = [];
@@ -125,8 +128,7 @@ class CasesController extends AdminController
             }
             return $options;
         });
-        
-        $form->select('case_type', __('Case Type'))->options((new CaseType)::selectOptions())->default(2);
+        $form->text('machine_number', __('Machine Number'))->readonly();
         
         $form->divider('Assign Engineer');
 
@@ -160,9 +162,28 @@ class CasesController extends AdminController
         
         $form->saving(function (Form $form){
             $customer = \App\Models\Customer::findOrFail($form->customer_id);
-            // dump($customer);
+            //dump($customer);
+            //Log::Info($form);
+            if($form->engineer_id!=$form->model()->engineer_id){
+                $engineer = \App\Models\Engineer::findOrFail($form->engineer_id);
+                // send whatsapp message to customer
+                $rs = $this->sendWhatsappMessage("Hi {$customer->name}, Mr. {$engineer->name} (Engineer) is assigned to your case, He will visit your location at {$form->visit_date} {$form->visit_time}. \nThank You!", $customer->mobile);
+                //return response("Ok");
+                Log::Info("notification sent ". json_encode($rs));
+                $error = new MessageBag([
+                    'title'   => 'Engineer assigned successfully',
+                    'message' => 'Engineer assigned successfully to the case.',
+                ]);
+
+                return back()->with(compact('success'));
+            }else{
+               Log::Info("Form engineer id" . $form->engineer_id);
+               Log::Info("Model engineer id" . $form->model()->engineer_id);
+               Log::Info("Message could not send");
+            }
+
             // if service complete
-            if($form->service_status == '' && $form->case_status == 'CLOSE'){
+            if($form->service_status != 1 && $form->case_status == 'CLOSE'){
                 $error = new MessageBag([
                     'title'   => 'Select Service Status',
                     'message' => 'Please mark the service status before closing the case.',
@@ -185,17 +206,7 @@ class CasesController extends AdminController
                 }
             }
 
-            //Log::Info($form);
-            if($form->engineer_id!=$form->model()->engineer_id){
-                $engineer = \App\Models\Engineer::findOrFail($form->engineer_id);
-                // send whatsapp message to customer
-                $this->sendWhatsappMessage("Hi {$customer->name}, Mr. {$engineer->name} (Engineer) is assigned to your case, He will visit your location at {$form->visit_date} {$form->visit_time}. \nThank You!", $customer->mobile);
-                //return response("Ok");
-            }else{
-               Log::Info("Form engineer id" . $form->engineer_id);
-               Log::Info("Model engineer id" . $form->model()->engineer_id);
-               Log::Info("Message could not send");
-            }
+            
         });
         return $form;
     }
@@ -212,6 +223,6 @@ class CasesController extends AdminController
         $auth_token = getenv("TWILIO_AUTH_TOKEN");
 
         $client = new Client($account_sid, $auth_token);
-        return $client->messages->create("whatsapp:+".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
+        return $client->messages->create("whatsapp:+91".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
     }
 }
