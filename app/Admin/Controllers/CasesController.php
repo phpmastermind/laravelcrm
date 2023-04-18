@@ -2,7 +2,7 @@
 
 namespace App\Admin\Controllers;
 
-require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
+#require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
 
 
 use App\Models\Customer;
@@ -18,7 +18,7 @@ use Encore\Admin\Grid;
 use Encore\Admin\Show;
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
-use Twilio\Rest\Client;
+#use Twilio\Rest\Client;
 use Log;
 
 class CasesController extends AdminController
@@ -98,7 +98,7 @@ class CasesController extends AdminController
         $show->field('engineer.name', __('Engineer'));
         $show->field('casetype.title', __('Case type'));
         $show->field('remarks', __('Remarks'));
-       // $show->field('extra', __('Extra'));
+        // $show->field('extra', __('Extra'));
         $show->field('case_status', __('Case status'));
         $show->field('created_at', __('Created at'));
         $show->field('updated_at', __('Updated at'));
@@ -170,7 +170,7 @@ class CasesController extends AdminController
                 $rs = $this->sendWhatsappMessage("Hi {$customer->name}, Mr. {$engineer->name} (Engineer) is assigned to your case, He will visit your location at {$form->visit_date} {$form->visit_time}. \nThank You!", $customer->mobile);
                 //return response("Ok");
                 Log::Info("notification sent ". json_encode($rs));
-                $error = new MessageBag([
+                $success = new MessageBag([
                     'title'   => 'Engineer assigned successfully',
                     'message' => 'Engineer assigned successfully to the case.',
                 ]);
@@ -218,11 +218,22 @@ class CasesController extends AdminController
      */
     public function sendWhatsappMessage(string $message, string $recipient)
     {
-        $twilio_whatsapp_number = getenv('TWILIO_WHATSAPP_NUMBER');
-        $account_sid = getenv("TWILIO_SID");
-        $auth_token = getenv("TWILIO_AUTH_TOKEN");
-
-        $client = new Client($account_sid, $auth_token);
-        return $client->messages->create("whatsapp:+91".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
+        $url = env('WHATSAPP_API_URL');
+        $headers = ["Authorization" => "Bearer " . env('WHATSAPP_TOKEN')];
+        $params = [
+            "messaging_product" => "whatsapp",
+            "to" => "91".$recipient,
+            "type" => "text",
+            "text" => [
+                "body" => $message
+            ]
+        ];
+        if(env('APP_ENV') == "production"){
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request('POST', $url, ["headers" => $headers, "json" => $params]);
+            $data = $response->getBody();
+            Log::Info("Whatsapp server response");
+            Log::Info($data);
+        }
     }
 }

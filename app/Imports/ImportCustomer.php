@@ -31,7 +31,7 @@ class ImportCustomer implements ToModel
                 'warranty_status' => $row[8],
                 'date_of_inst' => date("Y-m-d", strtotime($row[9])),
                 'month' => $row[10],
-                'last_service_date' => (isset($row[11]))?$row[11]:null,
+                'last_service_date' => (isset($row[11]))?date("Y-m-d",strtotime($row[11])):null,
                 'status' => (isset($row[12]))?$row[12]:'1'
             ]);
         }

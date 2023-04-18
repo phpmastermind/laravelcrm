@@ -1,7 +1,7 @@
 <?php
 namespace App\Http\Controllers;
 
-require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
+#require_once("/home/dh_8dcy8x/kentcrm.fugital.com/vendor/twilio/sdk/src/Twilio/autoload.php");
 
 
 use App\Models\Customer;
@@ -11,7 +11,7 @@ use App\Models\Cases;
 
 use GuzzleHttp\Exception\RequestException;
 use Illuminate\Http\Request;
-use Twilio\Rest\Client; 
+#use Twilio\Rest\Client; 
 use Log;
 
 class ChatBotController extends Controller
@@ -19,12 +19,25 @@ class ChatBotController extends Controller
     public function listenToReplies(Request $request)
     {
         $data = $request->All();
+        $response = $data['entry'][0]['changes'][0]['value'];
         Log::Info($data);
+        Log::Info($response);
+        if(isset($data['statuses']) || isset($response['statuses']))
+            return;
+
         $message = "";
-        $from = $request->input('From');
+        // if using twilio client api
+        /*$from = $request->input('From');
         $from = str_replace("whatsapp:+91","",$from);
         $fromName = $request->input('ProfileName');
-        $body = $request->input('Body');
+        $body = $request->input('Body');*/
+
+        // if using whatsapp cloud api
+        $from = $response['messages'][0]['from'];
+        $from = str_replace("91","",$from);
+        $fromName = $response['contacts'][0]['profile']['name'];
+        $body = $response['messages'][0]['text']['body'];
+
         $customer = Customer::firstWhere('mobile', $from);
         //Log::Info($customer);
         $user = Chat::firstWhere('number', $from);
@@ -409,12 +422,31 @@ class ChatBotController extends Controller
      */
     public function sendmessage(string $message, string $recipient)
     {
-        $twilio_whatsapp_number = getenv('TWILIO_WHATSAPP_NUMBER');
+        /*$twilio_whatsapp_number = getenv('TWILIO_WHATSAPP_NUMBER');
         $account_sid = getenv("TWILIO_SID");
         $auth_token = getenv("TWILIO_AUTH_TOKEN");
 
         $client = new Client($account_sid, $auth_token);
-        return $client->messages->create("whatsapp:+91".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));
+        return $client->messages->create("whatsapp:+91".$recipient, array('from' => "whatsapp:$twilio_whatsapp_number", 'body' => $message));*/
+
+        $url = env('WHATSAPP_API_URL');
+        $headers = ["Authorization" => "Bearer " . env('WHATSAPP_TOKEN')];
+        $params = [
+            "messaging_product" => "whatsapp",
+            "to" => "91".$recipient,
+            "type" => "text",
+            "text" => [
+                "body" => $message
+            ]
+        ];
+        if(env('APP_ENV') == "production"){
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request('POST', $url, ["headers" => $headers, "json" => $params]);
+            $data = $response->getBody();
+            Log::Info("Whatsapp server response");
+            Log::Info($data);
+        }
+    
     }
 
 
