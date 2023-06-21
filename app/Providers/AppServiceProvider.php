@@ -23,6 +23,6 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot()
     {
-        //
+        ///Encore\Admin\Admin::directory('App/Admin/Filters/Cases/OpenCaseFilter');
     }
 }

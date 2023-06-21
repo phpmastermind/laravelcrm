@@ -18,6 +18,10 @@ Route::get('/', function () {
     return view('welcome');
 });
 
+Route::get('pp', function () {
+    return view('privacypolicy');
+});
+
 Route::get('/chatbot', 'App\Http\Controllers\ChatBotController@listenToReplies');
 
 // send message to whatsappsend
@@ -48,7 +52,6 @@ Route::get('/messages', function(Request $request) {
 
 
 Route::get('/webhook', function(Request $request){
-
     $data = $request->all();
     $verify_token =  env('VERIFY_TOKEN');
    
@@ -71,6 +74,6 @@ Route::get('/webhook', function(Request $request){
     Log::Info($response);
     return $response;
 });
-Auth::routes();
+//Auth::routes();
 
-Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');
+//Route::get('/home', [App\Http\Controllers\HomeController::class, 'index'])->name('home');

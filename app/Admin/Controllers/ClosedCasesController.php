@@ -21,7 +21,7 @@ use Illuminate\Http\Request;
 #use Twilio\Rest\Client;
 use Log;
 
-class CasesController extends AdminController
+class ClosedCasesController extends AdminController
 {
     /**
      * Title for current resource.
@@ -53,7 +53,7 @@ class CasesController extends AdminController
         //$grid->column('updated_at', __('Updated at'))->date('Y-m-d');
 
         $grid->model()->orderBy('created_at','desc');
-        $grid->model()->where('case_status', '!=', 'CLOSE');
+        $grid->model()->where('case_status', '=', 'CLOSE');
         $grid->filter(function($filter){
            $filter->disableIdFilter();
            $filter->equal('case_number', __('Case Number'));
@@ -76,11 +76,6 @@ class CasesController extends AdminController
                 }
                 return $options;
             });
-            $filter->equal('case_status', __('Case Status'))->select([
-                'OPEN' => 'Open',
-                'ACTIVE' => 'Active',
-                'CLOSE' => 'Close'
-            ]);
 
 
         });
@@ -134,10 +129,9 @@ class CasesController extends AdminController
             return $options;
         });
         $form->text('machine_number', __('Machine Number'))->readonly();
-        // Add the address field to the form (not saved in database)
         $form->text('customer.address', __('Address'));
 
-        $form->divider('Assign Engineer');
+        $form->divider('Assign Engineer');  
 
         $form->select('engineer_id',"Select Engineer")->options(function(){
             $engineers = \App\Models\Engineer::All();
@@ -227,14 +221,6 @@ class CasesController extends AdminController
                     // update last service date in 
                     $customer->last_service_date = $form->service_date;
                     $customer->save();
-
-                    $parameters = [
-                        ['type' => 'text','text'=> $customer->name],
-                    ];
-
-                    // send whatsapp message to engineer
-                    $rs = $this->sendTemplateMessage('customer_closure_message', $customer->mobile, $parameters);
-
                 }else{
                     $error = new MessageBag([
                         'title'   => 'Select Case Status',

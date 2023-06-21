@@ -13,4 +13,7 @@ class Areas extends Model
     use ModelTree;
 
     protected $table="areas";
+
+    protected $fillable = ['parent_id', 'title', 'area_code','order'];
+
 }

@@ -25,6 +25,8 @@ class ChatBotController extends Controller
         if(isset($data['statuses']) || isset($response['statuses']))
             return;
 
+        $admin_phone = env('ADMIN_PHONE');
+
         $message = "";
         // if using twilio client api
         /*$from = $request->input('From');
@@ -43,51 +45,46 @@ class ChatBotController extends Controller
         $user = Chat::firstWhere('number', $from);
         Log::Info($user);
         $menus = $this->getCaseTypes();
-        if(!$user){
-                        
-            $message = "Hi {$fromName}, I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
+        if(!$user || $body == "menu"){  
+            if(!$user){
+                Chat::create([
+                    "number" => $from, 
+                    "status" => "main", 
+                    "chat"   => ""
+                ]);
+            }
+
+            $message = "Hi {$fromName}, I\'m your Decent Service Assistant 🙂 from Decent Service authorized sales & service provider Kent Ro Systems Ltd.!\nHow can I help you? Kindly select one of the options below by using number.\nTo get back to the main menu please type menu.\n\n";
             $i = 1;
             foreach ($menus as $menu) {
-               $message .= "[{$i}] . $menu->title" . "\n";
+               $message .= "*{$i}*. $menu->title" . "\n";
                $i++;
             }
-            //$res = $this->sendmessage($message, $from);
-
-            Chat::create([
-                "number" => $from, 
-                "status" => "main", 
-                "chat"   => ""
-            ]);
-
+        
         }elseif($user->status == 'main'){
-            try {
-                $option = intval($body);
-            } catch (Exception $e) {
-                $message = "Please enter a valid response";
-                $res = $this->sendmessage($message, $from);
-                return str($res);
-            }
-
-            if($user){
-                $chat = json_decode($user->chat, true);
-                $chat['menu'] = $option;
-                $user->chat = json_encode($chat);
-                $user->status = 'confirm_number';
-                $user->save();
-            }
-            $message = "Can you please confirm if {$from} is your registered mobile number? Reply option number.\n\n.";
-            $message .= "[1]. Yes\n [2]. No";
-            $rs = $this->sendmessage($message,$from);
-            return $rs;
             
-        }elseif($user->status == 'confirm_number'){
-            try {
                 $option = intval($body);
-            } catch (Exception $e) {
-                $message = "Please enter a valid response";
-                $res = $this->sendmessage($message, $from);
-                return str($res);
-            }
+                if($option > 0 && $option < 5){
+                    if($user){
+                        $chat = json_decode($user->chat, true);
+                        $chat['menu'] = $option;
+                        $user->chat = json_encode($chat);
+                        $user->status = 'confirm_number';
+                        $user->save();
+                    }
+                    $message = "Can you please confirm if {$from} is your registered mobile number? Reply option number.\n\n";
+                    $message .= "*1*. Yes\n*2*. No";
+                    $rs = $this->sendmessage($message,$from);
+                    return $rs;
+                }else{
+                    $message = "Please choose valid menu option";
+                    $res = $this->sendmessage($message, $from);
+                    return str($res);
+                }
+           
+        }elseif($user->status == 'confirm_number'){
+            
+            $option = intval($body);
 
             if($option == 1){
                $customers = Customer::where('mobile', $from)->get();
@@ -109,26 +106,33 @@ class ChatBotController extends Controller
                             $case->case_status = "OPEN";
                             $case->save();
 
-                            $user->status = 'booked';
-                            $user->chat = '';
-                            $user->save();
+                            $user->status = 'main';
+                            $user->chat = "";
+                            $user->delete();
 
-                            $message = "Service Booked Successfully. Your Request Id is {$caseid}.\n We will call you shortly. Thank You!";
+                            $message = "Service Booked Successfully. Your Case Id is {$caseid}.\nWe will call you shortly.You can also call us on {$admin_phone}.\nThank You!";
 
-                        }else if ($option == 2) {
-                            
+                            // send notification to admin
+                            $parameters = [
+                                ['type' => 'text','text'=> $case_type->title],
+                                ['type' => 'text','text'=> $customer->name],
+                                ['type' => 'text','text'=> $customer->mobile],
+                                ['type' => 'text','text'=> $caseid]
+                            ];
+                            $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
+
+                        }elseif ($option == 2) {
                             $user->status = 'register_service_call';
                             $user->save();
                             
-                            $message = "Please select a machine by chossing an option below.\n.";
+                            $message = "Please select a machine by chossing an option below.\n\n";
                             $i=1;
                             foreach ($customers as $customer) {
                                 if($customer->machine_model!=""){
-                                    $message  .= "[{$i}]. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
+                                    $message  .= "*{$i}*. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
                                     $i++;
                                 }
-                            }
-                                
+                            }    
                         }elseif ($option == 3) {
                             $user->status = 'new_installation';
                             $user->save();
@@ -137,7 +141,7 @@ class ChatBotController extends Controller
                             $i=1;
                             foreach ($customers as $customer) {
                                 if($customer->machine_model!=""){
-                                    $message  .= "[{$i}]. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
+                                    $message  .= "*{$i}*. " . $customer->machine_model ."(". $customer->machine_code. ")\n";
                                     $i++;
                                 }
                             }
@@ -146,24 +150,24 @@ class ChatBotController extends Controller
                             $user->status = 're_installation';
                             $user->save();
                             $customer = Customer::where("mobile", $from)->first();
-                            $message = "Do you want installation on your current address?.\n.";
+                            $message = "Do you want installation on your current address?\n";
                             $message .= "Current Address: ". $customer->address. "\n\n";
                             
-                            $message .= "[1]. Current Address\n[2]. Enter New Address";
+                            $message .= "*1*. Current Address\n*2*. Enter New Address";
                         }else{
-                            $message  = 'Please enter a valid option.';
+                            $message  = 'Please enter a valid menu option.';
                         }
 
                     }
                }else{
-                    $user->status = 'booked_failed';
+                    $user->status = 'main';
                     $user->chat = "";
                     $user->save();
 
                     $message="Sorry, Your number is not regisered with us. \nPlease try with other number which is registered at the time of product purchase. Thank You!";
                }
 
-            }else{
+            }elseif($option == 2){
                 
                 if($user){
                     $chat = json_decode($user->chat, true);
@@ -191,22 +195,32 @@ class ChatBotController extends Controller
 
                         $user->status = 'main';
                         $user->chat = '';
-                        $user->save();
+                        $user->delete();
 
-                        $message = "Your request is booked successfully. Your Request Id is {$caseid}.\n We will call you shortly. Thank You!";
+                        $message = "Your request is booked successfully. Your Request Id is {$caseid}.\n We will call you shortly. You can also call us on {$admin_phone}.\nThank You!";
+
+                        // send notification to admin
+                        $parameters = [
+                            ['type' => 'text','text'=> $case_type->title],
+                            ['type' => 'text','text'=> $customer->name],
+                            ['type' => 'text','text'=> $customer->mobile],
+                            ['type' => 'text','text'=> $caseid]
+                        ];
+                        $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
                     }else{
+                        
                         $user->status = 'main';
                         $user->chat = "";
-                        $user->save();
+                        $user->delete();
 
                         $message="Sorry, Your request could not booked. Please try again!";
                     }
 
                 }else{
 
-                    $user->status = 'booked_failed';
+                    $user->status = 'main';
                     $user->chat = "";
-                    $user->save();
+                    $user->delete();
 
                     $message="Please try with other number which is registered at the time of product purchase. Thank You!";
                 }
@@ -214,23 +228,10 @@ class ChatBotController extends Controller
         
         }else if($user->status == 'register_service_call'){
 
-            try {
-                $option = intval($body);
-            } catch (Exception $e) {
-                $message = "Please enter a valid response";
-                $res = $this->sendmessage($message, $from);
-                return str($res);
-            }
-
+            $option = intval($body);
             $machines = $this->getMachines($from);
-            if($option == 0):
-                $user->status = 'main';
-                $user->chat = '';
-                $user->save();
-                $message = "You can choose from one of the options below:\n\n Type Number \n\n";
-                $menus = $this->getCaseTypes();
-                foreach ($menus as $key => $menu) {$message .= "[".($key+1)."]. " . $menu;}
-            elseif($option >= 1 && $option <= count($machines)):
+
+            if($option >= 1 && $option <= count($machines)):
                 $customer = Customer::where("mobile", $from)->first();
                 $case_type = CaseType::where('title', 'Register Service Call')->first();
 
@@ -247,34 +248,29 @@ class ChatBotController extends Controller
                 $case->case_status = "OPEN";
                 $case->save();
 
-                $user->status = 'booked';
-                $user->chat = '';
-                $user->save();
+                $user->status = 'main';
+                $user->chat = '{}';
+                $user->delete();
 
                 $message = "Service Booked Successfully. Your Case Id is {$caseid}. \n We will call you shortly. Thank You!";
+
+                // send notification to admin
+                $parameters = [
+                    ['type' => 'text','text'=> $case_type->title],
+                    ['type' => 'text','text'=> $customer->name],
+                    ['type' => 'text','text'=> $customer->mobile],
+                    ['type' => 'text','text'=> $caseid]
+                ];
+                $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
             else:    
-                $message = "Wrong input, Try Again.";
+                $message = "Please choose a valid option.";
             endif;
 
         }else if($user->status == 'new_installation'){
 
-            try {
-                $option = intval($body);
-            } catch (Exception $e) {
-                $message = "Please enter a valid response";
-                $res = $this->sendmessage($message, $from);
-                return str($res);
-            }
-
+            $option = intval($body);
             $machines = $this->getMachines($from);
-            if($option == 0):
-                $user->status = 'main';
-                $user->chat = '';
-                $user->save();
-                $message = "You can choose from one of the options below:\n\n Type Number \n\n";
-                $menus = $this->getCaseTypes();
-                foreach ($menus as $key => $menu) {$message .= "[".($key+1)."]. " . $menu;}
-            elseif($option >= 1 && $option <= count($machines)):
+            if($option >= 1 && $option <= count($machines)):
                 $customer = Customer::where("mobile", $from)->first();
                 $case_type = CaseType::where('title', 'New Installation')->first();
 
@@ -291,34 +287,30 @@ class ChatBotController extends Controller
                 $case->case_status = "OPEN";
                 $case->save();
 
-                $user->status = 'booked';
-                $user->chat = '';
-                $user->save();
+                $user->status = 'main';
+                $user->chat = '{}';
+                $user->delete();
 
-                $message = "Service Booked Successfully. Your Case Id is {$caseid}. \n We will call you shortly. Thank You!";
+                $message = "Service Booked Successfully. Your Case Id is {$caseid}.\nWe will call you shortly.You can also call us on {$admin_phone}.\nThank You!";
+
+                // send notification to admin
+                $parameters = [
+                    ['type' => 'text','text'=> $case_type->title],
+                    ['type' => 'text','text'=> $customer->name],
+                    ['type' => 'text','text'=> $customer->mobile],
+                    ['type' => 'text','text'=> $caseid]
+                ];
+                $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
+
             else:    
-                $message = "Wrong input, Try Again.";
+                $message = "Please choose a valid option.";
             endif;
 
         }elseif ($user->status == 're_installation') {
+            $option = intval($body);
             
-            try {
-                $option = intval($body);
-            } catch (Exception $e) {
-                $message = "Please enter a valid response";
-                $res = $this->sendmessage($message, $from);
-                return str($res);
-            }
-
             $machines = $this->getMachines($from);
-            if($option == 0):
-                $user->status = 'main';
-                $user->chat = '';
-                $user->save();
-                $message = "You can choose from one of the options below:\n\n Type Number \n\n";
-                $menus = $this->getCaseTypes();
-                foreach ($menus as $key => $menu) {$message .= "[".($key+1)."]. " . $menu;}
-            elseif($option == 1):
+            if($option == 1):
                 $customer = Customer::where("mobile", $from)->first();
                 $case_type = CaseType::where('title', 'Re-Installation')->first();
 
@@ -333,24 +325,33 @@ class ChatBotController extends Controller
                 $case->extra = json_encode($address);
                 $case->save();
 
-                $user->status = 'booked';
-                $user->chat = '';
-                $user->save();
+                $user->status = 'main';
+                $user->chat = '{}';
+                $user->delete();
 
-                $message = "Service Booked Successfully. Your Request Id is {$caseid} .\n We will call you shortly. Thank You!";
+                $message = "Service Booked Successfully. Your Case Id is {$caseid}.\nWe will call you shortly.You can also call us on {$admin_phone}.\nThank You!";
+
+                // send notification to admin
+                $parameters = [
+                    ['type' => 'text','text'=> $case_type->title],
+                    ['type' => 'text','text'=> $customer->name],
+                    ['type' => 'text','text'=> $customer->mobile],
+                    ['type' => 'text','text'=> $caseid]
+                ];
+                $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
+
             elseif($option == 2):
                 
                 $user->status = 'enter_new_address';
-                $user->chat = '';
+                $user->chat = '{}';
                 $user->save();
 
                 $message = "Please enter your new address in one line.";
             else:    
-                $message = "Wrong input, Try Again.";
+                $message = "Please choose a valid option";
             endif;
 
-
-        }elseif ($user->status == 'enter_new_address') {
+        }elseif($user->status == 'enter_new_address') {
 
             $customer = Customer::where("mobile", $from)->first();
             $case_type = CaseType::where('title', 'Re-Installation')->first();
@@ -366,36 +367,18 @@ class ChatBotController extends Controller
             $case->extra = json_encode($address);
             $case->save();
 
-            $user->status = 'booked';
-            $user->chat = '';
-            $user->save();
+            $user->delete();
 
-            $message = "Service Booked Successfully. Your Request Id is {$caseid}. \n We will you shortly. Thank You!";
-
-        }elseif ($user->status == 'booked') {
-            $user->status = 'main';
-            $user->chat = '';
-            $user->save();
-        
-            $message = "Thanks for your contacting again. Please choose from the options below. Type Menu Number and send.\n\n";
-            $i = 1;
-            foreach ($menus as $menu) {
-               $message .= "[{$i}] . $menu->title" . "\n";
-               $i++;
-            }
-
-        }else{
-        
-            $user->status = 'main';
-            $user->chat = '';
-            $user->save();
-
-            $message = "Hi {$fromName}, I\'m your Kent Assistant 🙂 from KENT House of Purity!\nWhat can I help you with today? Please choose from the options below. Type Menu Number and send.\n\n";
-            $i = 1;
-            foreach ($menus as $menu) {
-               $message .= "[{$i}] . $menu->title" . "\n";
-               $i++;
-            }
+            $message = "Service Booked Successfully. Your Case Id is {$caseid}.\nWe will call you shortly.You can also call us on {$admin_phone}.\nThank You!";
+            
+            $parameters = [
+                ['type' => 'text','text'=> $case_type->title],
+                ['type' => 'text','text'=> $customer->name],
+                ['type' => 'text','text'=> $customer->mobile],
+                ['type' => 'text','text'=> $caseid]
+            ];
+            $this->sendTemplateMessage('admin_newcase_notification', $admin_phone, $parameters);
+         
         }
 
         /*if($user){
@@ -405,10 +388,14 @@ class ChatBotController extends Controller
             $user->save();
         }*/
 
-        Log::Info("Message". $message);
-        $rs = $this->sendmessage($message,$from);
-        Log::Info($rs);
-        return $rs;
+        //Log::Info("Message". $message);
+        if($message!=""){
+            $rs = $this->sendmessage($message,$from);
+            Log::Info($rs);
+            return $rs;
+        }else{
+            return 1;
+        }
     }
 
     public function sendWhatsappMessage(Request $request){
@@ -437,6 +424,42 @@ class ChatBotController extends Controller
             "type" => "text",
             "text" => [
                 "body" => $message
+            ]
+        ];
+        if(env('APP_ENV') == "production"){
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request('POST', $url, ["headers" => $headers, "json" => $params]);
+            $data = $response->getBody();
+            Log::Info("Whatsapp server response");
+            Log::Info($data);
+        }
+    
+    }
+
+    /**
+     * Sends a WhatsApp message  to user using
+     * @param string $message Body of sms
+     * @param string $recipient Number of recipient
+     */
+    public function sendTemplateMessage(string $template_name, string $recipient, array $parameters)
+    {
+        $url = env('WHATSAPP_API_URL');
+        $headers = ["Authorization" => "Bearer " . env('WHATSAPP_TOKEN')];
+        $params = [
+            "messaging_product" => "whatsapp",
+            "to" => "91". $recipient,
+            "type" => "template",
+            "template" => [
+                "name" => $template_name,
+                "language" => [
+                    "code" => "en_US"
+                ],
+                "components" => [
+                    [
+                        "type" => "body",
+                        "parameters" => $parameters
+                    ]
+                ]
             ]
         ];
         if(env('APP_ENV') == "production"){
@@ -526,16 +549,13 @@ class ChatBotController extends Controller
                     $user->chat = '';
                     $user->save();
                 }
-                Log::Info($user);
-                $menus = $this->getCaseTypes();
-                $message = "Hi {$customer->name} , I\'m your Kent Assistant 🙂 from KENT House of Purity!\nYour R.O water purifier ({$customer->machine_model}) service due is over. Please choose from the options below to book the service. Type option number and send.\n\n";
-                $i = 1;
-                foreach ($menus as $menu) {
-                   $message .= "[{$i}] . $menu->title" . "\n";
-                   $i++;
-                }
-                // send notification on whatsapp
-                $this->sendmessage($message, $customer->mobile); 
+
+                // send notification to admin
+                $parameters = [
+                    ['type' => 'text','text'=> $customer->name],
+                    ['type' => 'text','text'=> $customer->machine_model]
+                ];
+                $this->sendTemplateMessage('service_reminder', $customer->mobile, $parameters);
 
                 $customer->last_reminder = date("Y-m-d H:i:s");
                 $customer->save();

@@ -21,6 +21,7 @@ class Customer extends Model
 
     public static function getCustomersWithLastServiceDoneThreeMonthsBefore() {
         $threeMonthsAgo = Carbon::now()->subMonths(3);
+        $sevenDaysAgo = Carbon::now()->subDays(7);
         return DB::table('customers')->where(function($query) use ($threeMonthsAgo) {
                         $query->where('last_service_date', '<=', $threeMonthsAgo)
                               ->orWhereNull('last_service_date');
@@ -28,6 +29,10 @@ class Customer extends Model
                     ->where(function($query) use ($threeMonthsAgo) {
                         $query->where('date_of_inst', '<=', $threeMonthsAgo)
                               ->orWhereNull('date_of_inst');
+                    }) 
+                    ->where(function($query) use ($sevenDaysAgo) {
+                        $query->where('last_reminder', '<=', $sevenDaysAgo)
+                              ->orWhereNull('last_reminder');
                     })
                     ->where('status', '=', '1')
                     ->get();

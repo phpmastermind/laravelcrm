@@ -75,8 +75,8 @@ class EngineerController extends AdminController
         $form = new Form(new Engineer());
 
         $form->text('name', __('Name'));
-        $form->mobile('mobile', __('Mobile'));
-        $form->mobile('alternate_mobile', __('Alternate mobile'));
+        $form->mobile('mobile', __('Mobile'))->options(['mask' => '9999999999']);
+        $form->mobile('alternate_mobile', __('Alternate mobile'))->options(['mask' => '9999999999']);
         $form->select('area', __("Select Area"))->options((new Areas())::selectOptions());
         $form->textarea('address', __('Address'));
         $form->switch('status', __('Status'));

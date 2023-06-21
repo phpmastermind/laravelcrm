@@ -11,10 +11,11 @@ Route::group([
     'as'            => config('admin.route.prefix') . '.',
 ], function (Router $router) {
 
-    $router->get('/', 'HomeController@index')->name('home');
+    $router->get('/', 'CasesController@index')->name('cases');
     $router->resource('customers', CustomerController::class);
     $router->resource('engineers', EngineerController::class);
     $router->resource('cases', CasesController::class);
+    $router->resource('closed-cases', ClosedCasesController::class);
     $router->resource('areas', AreasController::class);
     $router->resource('articles', ArticleController::class);
     $router->resource('case-types', CaseTypeController::class);

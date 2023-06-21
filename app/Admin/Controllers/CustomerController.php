@@ -9,6 +9,11 @@ use Encore\Admin\Form;
 use Encore\Admin\Grid;
 use Encore\Admin\Show;
 use App\Admin\Actions\Customer\ImportCustomerAction;
+use GuzzleHttp\Exception\RequestException;
+use Illuminate\Http\Request;
+#use Twilio\Rest\Client;
+use Log;
+use Illuminate\Support\MessageBag;
 
 class CustomerController extends AdminController
 {
@@ -44,11 +49,12 @@ class CustomerController extends AdminController
         $grid->column('last_service_date', __('Last Service'));
         $grid->column('updated_at', __('Updated at'))->date('DD/MM/YYYY');
         
-        $grid->model()->orderBy('id','asc');
+        $grid->model()->orderBy('id','desc');
         $grid->filter(function($filter){
            $filter->disableIdFilter();
            $filter->like('area', __('Area'));
            $filter->like('mobile', __('Mobile'));
+           $filter->like('machine_number', __('Machine Number'));
            //$filter->like('article.title', __('Category'));
         });
 
@@ -108,8 +114,59 @@ class CustomerController extends AdminController
         $form->text('warranty_status', __('Warranty status'));
         $form->date('date_of_inst', __('Date of inst'))->default(date('Y-m-d'));
         $form->text('month', __('Month'));
+        $form->date('last_service_date', __('Last Service Date'))->default(date('Y-m-d'));
+
         $form->switch('status', __('Status'));
 
+        $form->saved(function (Form $form){
+            $parameters = ["type" => "text", "text" => $form->name];
+            if(!$form->engineer_id){
+                //Log::Info("New customer welcome_message sent.");
+                $success = new MessageBag([
+                    'title'   => 'Success',
+                    'message' => 'new customer',
+                ]);
+                $rs = $this->sendTemplateMessage('welcome_message', $form->mobile, $parameters);
+            }
+
+           // return back()->with(compact('success'));
+        });
         return $form;
+    }
+
+    /**
+     * Sends a WhatsApp message  to user using
+     * @param string $message Body of sms
+     * @param string $recipient Number of recipient
+     */
+    public function sendTemplateMessage(string $template_name, string $recipient, array $parameters)
+    {
+        $url = env('WHATSAPP_API_URL');
+        $headers = ["Authorization" => "Bearer " . env('WHATSAPP_TOKEN')];
+        $params = [
+            "messaging_product" => "whatsapp",
+            "to" => "91". $recipient,
+            "type" => "template",
+            "template" => [
+                "name" => $template_name,
+                "language" => [
+                    "code" => "en_US"
+                ],
+                "components" => [
+                    [
+                        "type" => "body",
+                        "parameters" => $parameters
+                    ]
+                ]
+            ]
+        ];
+        if(env('APP_ENV') == "production"){
+            $client = new \GuzzleHttp\Client();
+            $response = $client->request('POST', $url, ["headers" => $headers, "json" => $params]);
+            $data = $response->getBody();
+            Log::Info("Whatsapp server response");
+            Log::Info($data);
+        }
+    
     }
 }
